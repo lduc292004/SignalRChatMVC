@@ -1,0 +1,122 @@
+﻿@{
+    ViewData["Title"] = "Zalo Mini Chat";
+}
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+<style>
+    body {
+        background-color: #f0f2f5;
+    }
+    .chat-container {
+        display: flex;
+        height: 80vh;
+        max-width: 900px;
+        margin: 40px auto;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .user-list {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #ddd;
+        padding: 10px;
+        overflow-y: auto;
+    }
+    .user-list h5 {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    .chat-area {
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .messages {
+        flex-grow: 1;
+        padding: 15px;
+        overflow-y: auto;
+    }
+    .input-area {
+        display: flex;
+        border-top: 1px solid #ddd;
+        padding: 10px;
+    }
+    .input-area input {
+        flex: 1;
+        margin-right: 10px;
+    }
+</style>
+
+<div class="chat-container">
+    <div class="user-list">
+        <h5>👥 Online</h5>
+        <ul id="usersList" class="list-unstyled"></ul>
+    </div>
+    <div class="chat-area">
+        <div class="messages" id="messagesList"></div>
+        <div class="input-area">
+            <input type="text" id="messageInput" class="form-control" placeholder="Nhập tin nhắn..." />
+            <button id="sendButton" class="btn btn-primary">Gửi</button>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
+    <script>
+        const username = prompt("Nhập tên của bạn:");
+        const connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+        connection.on("ReceiveMessage", (user, message) => {
+            addMessage(`${user}: ${message}`);
+        });
+
+        connection.on("ReceivePrivateMessage", (fromUser, message) => {
+            addMessage(`(Riêng) ${fromUser}: ${message}`, true);
+        });
+
+        connection.on("UserJoined", (user) => addMessage(`🟢 ${user} đã tham gia`));
+        connection.on("UserLeft", (user) => addMessage(`🔴 ${user} đã rời đi`));
+
+        connection.on("UpdateUserList", (users) => {
+            const list = document.getElementById("usersList");
+            list.innerHTML = "";
+            users.forEach(u => {
+                const li = document.createElement("li");
+                li.textContent = u;
+                li.classList.add("py-1");
+                li.onclick = () => selectUser(u);
+                list.appendChild(li);
+            });
+        });
+
+        connection.start().then(() => connection.invoke("JoinChat", username));
+
+        document.getElementById("sendButton").addEventListener("click", async () => {
+            const msg = document.getElementById("messageInput").value;
+            if (selectedUser && selectedUser !== username) {
+                await connection.invoke("SendPrivateMessage", selectedUser, username, msg);
+            } else {
+                await connection.invoke("SendMessage", username, msg);
+            }
+            document.getElementById("messageInput").value = "";
+        });
+
+        let selectedUser = null;
+        function selectUser(user) {
+            selectedUser = user;
+            addMessage(`💬 Bạn đang nhắn riêng với ${user}`);
+        }
+
+        function addMessage(msg, isPrivate = false) {
+            const div = document.createElement("div");
+            div.textContent = msg;
+            div.classList.add("mb-2");
+            if (isPrivate) div.style.color = "blue";
+            document.getElementById("messagesList").appendChild(div);
+            div.scrollIntoView();
+        }
+    </script>
+}
