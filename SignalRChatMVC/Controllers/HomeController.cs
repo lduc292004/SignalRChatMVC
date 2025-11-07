@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using SignalRChatMVC.Models;
 
 namespace SignalRChatMVC.Controllers
 {
+    [Authorize] // yeu cau dang nhap de vao chat
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -13,10 +15,15 @@ namespace SignalRChatMVC.Controllers
             _logger = logger;
         }
 
+        // TRang chinh sau khi dang nhap 
         public IActionResult Index()
         {
+            // lay ten nguoi dung identity
+            
             return View();
         }
+        // Dang xuat kho he thong 
+        
 
         public IActionResult Privacy()
         {

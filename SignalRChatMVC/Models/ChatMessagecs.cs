@@ -1,9 +1,14 @@
-﻿namespace SignalRChatMVC.Models
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace SignalRChatMVC.Models
 {
     public class ChatMessage
     {
-        public string User { get; set; }
+        [Key] // <-- thêm dòng này
+        public int Id { get; set; }
+
+        public string Sender { get; set; }
         public string Message { get; set; }
-        public string Avatar { get; set; }
+        public DateTime SentTime { get; set; }
     }
 }

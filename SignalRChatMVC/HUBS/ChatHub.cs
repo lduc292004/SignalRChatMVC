@@ -48,7 +48,8 @@ namespace SignalRChatMVC.Hubs
         public async Task SendMessage(string user, string message)
         {
             var time = DateTime.Now.ToString("HH:mm:ss");
-            await Clients.All.SendAsync("ReceiveMessage", user, message, time);
+            var messageData = new { user = user, content = message, time = time, type = "text", originalFileName = (string?)null };
+            await Clients.All.SendAsync("ReceiveMessage", messageData);
         }
 
         public async Task SendPrivateMessage(string toUser, string fromUser, string message)
@@ -151,7 +152,8 @@ namespace SignalRChatMVC.Hubs
             if (ChatGroups.ContainsKey(groupName))
             {
                 var time = DateTime.Now.ToString("HH:mm:ss");
-                await Clients.Group(groupName).SendAsync("ReceiveGroupMessage", groupName, user, message, time);
+                var messageData = new { user = user, content = message, time = time, type = "text", originalFileName = (string?)null };
+                await Clients.Group(groupName).SendAsync("ReceiveGroupMessage", groupName, user, messageData);
             }
         }
 
