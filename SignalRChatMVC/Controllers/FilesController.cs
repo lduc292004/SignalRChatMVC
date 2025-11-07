@@ -1,73 +1,134 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.AspNetCore.Hosting;
-using System.IO;
-using SignalRChatMVC.Hubs;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
-public class FilesController : Controller
+namespace SignalRChatMVC.Controllers
 {
-    private readonly IHubContext<ChatHub> _hubContext;
-    private readonly IWebHostEnvironment _env;
-
-    // Dependency Injection
-    public FilesController(IHubContext<ChatHub> hubContext, IWebHostEnvironment env)
+    [Route("api/[controller]")]
+    [ApiController]
+    public class FileController : ControllerBase
     {
-        _hubContext = hubContext;
-        _env = env;
-    }
+        private readonly IWebHostEnvironment _env;
 
-    [HttpPost]
-    [Route("api/upload")]
-    public async Task<IActionResult> Upload(IFormFile file, string senderName, bool isGroupMessage, string targetName)
-    {
-        if (file == null || file.Length == 0) return BadRequest(new { success = false, message = "Không có file được chọn." });
-
-        try
+        public FileController(IWebHostEnvironment env)
         {
-            // 1. Lưu file vật lý vào wwwroot/uploads
-            var fileExtension = Path.GetExtension(file.FileName);
-            var uniqueFileName = Guid.NewGuid().ToString() + fileExtension;
-            var uploadsFolder = Path.Combine(_env.WebRootPath, "uploads");
+            _env = env;
+        }
 
-            if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
-            var filePath = Path.Combine(uploadsFolder, uniqueFileName);
+        // 🟩 Upload file/ảnh vào nhóm cụ thể
+        [HttpPost("upload/{groupName}")]
+        public async Task<IActionResult> UploadToGroup(string groupName, IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "Không có file nào được chọn." });
 
-            using (var stream = new FileStream(filePath, FileMode.Create))
+            if (string.IsNullOrWhiteSpace(groupName))
+                return BadRequest(new { error = "Thiếu tên nhóm." });
+
+            // Giới hạn dung lượng tối đa 20MB
+            if (file.Length > 20 * 1024 * 1024)
+                return BadRequest(new { error = "Kích thước file vượt quá giới hạn (20MB)." });
+
+            // Chặn định dạng nguy hiểm
+            var ext = Path.GetExtension(file.FileName).ToLower();
+            var blocked = new[] { ".exe", ".bat", ".cmd", ".dll", ".js", ".msi", ".sh" };
+            if (blocked.Contains(ext))
+                return BadRequest(new { error = "Định dạng file không được phép tải lên." });
+
+            // Tạo đường dẫn uploads theo nhóm
+            var uploadsDir = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", groupName);
+            if (!Directory.Exists(uploadsDir))
+                Directory.CreateDirectory(uploadsDir);
+
+            // Tên file duy nhất
+            var fileName = $"{Guid.NewGuid()}_{Path.GetFileName(file.FileName)}";
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            await using (var stream = new FileStream(filePath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            // 2. Chuẩn bị dữ liệu thông báo
-            var fileUrl = $"/uploads/{uniqueFileName}";
-            var time = DateTime.Now.ToString("HH:mm:ss");
-            var fileType = file.ContentType.StartsWith("image") ? "image" : "file";
+            var fileUrl = $"/uploads/{groupName}/{fileName}";
+            var isImage = new[] { ".jpg", ".jpeg", ".png", ".gif", ".webp" }.Contains(ext);
 
-            var messageData = new
+            return Ok(new
             {
-                user = senderName,
-                content = fileUrl,
-                time = time,
-                type = fileType,
-                originalFileName = file.FileName
+                success = true,
+                name = file.FileName,
+                url = fileUrl,
+                size = file.Length,
+                uploadedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                type = isImage ? "image" : "file"
+            });
+        }
+
+        // 🟨 Tải file từ nhóm
+        [HttpGet("download/{groupName}/{fileName}")]
+        public IActionResult DownloadFromGroup(string groupName, string fileName)
+        {
+            if (string.IsNullOrEmpty(groupName) || string.IsNullOrEmpty(fileName))
+                return BadRequest();
+
+            var filePath = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", groupName, fileName);
+            if (!System.IO.File.Exists(filePath))
+                return NotFound();
+
+            var ext = Path.GetExtension(fileName).ToLower();
+            var contentType = ext switch
+            {
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".png" => "image/png",
+                ".gif" => "image/gif",
+                ".pdf" => "application/pdf",
+                _ => "application/octet-stream"
             };
 
-            // 3. Gửi thông báo qua SignalR
-            if (isGroupMessage)
-            {
-                await _hubContext.Clients.Group(targetName).SendAsync("ReceiveGroupMessage", targetName, messageData);
-            }
-            else
-            {
-                await _hubContext.Clients.All.SendAsync("ReceiveMessage", messageData);
-            }
-
-            return Ok(new { success = true, url = fileUrl });
+            var fileBytes = System.IO.File.ReadAllBytes(filePath);
+            return File(fileBytes, contentType, fileName);
         }
-        catch (Exception ex)
+
+        // 🟧 Xóa file trong nhóm
+        [HttpDelete("delete/{groupName}/{fileName}")]
+        public IActionResult DeleteFromGroup(string groupName, string fileName)
         {
-            return StatusCode(500, new { success = false, message = $"Lỗi Server: {ex.Message}" });
+            if (string.IsNullOrEmpty(groupName) || string.IsNullOrEmpty(fileName))
+                return BadRequest();
+
+            var filePath = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", groupName, fileName);
+            if (!System.IO.File.Exists(filePath))
+                return NotFound();
+
+            System.IO.File.Delete(filePath);
+            return Ok(new { success = true, message = "Đã xóa file thành công." });
+        }
+
+        // 🟦 Danh sách file trong nhóm (tùy chọn)
+        [HttpGet("list/{groupName}")]
+        public IActionResult ListFiles(string groupName)
+        {
+            if (string.IsNullOrWhiteSpace(groupName))
+                return BadRequest();
+
+            var uploadsDir = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", groupName);
+            if (!Directory.Exists(uploadsDir))
+                return Ok(new List<object>());
+
+            var files = Directory.GetFiles(uploadsDir)
+                .Select(f => new
+                {
+                    name = Path.GetFileName(f),
+                    url = $"/uploads/{groupName}/{Path.GetFileName(f)}",
+                    size = new FileInfo(f).Length,
+                    modifiedAt = System.IO.File.GetLastWriteTime(f).ToString("yyyy-MM-dd HH:mm:ss")
+                });
+
+            return Ok(files);
         }
     }
 }

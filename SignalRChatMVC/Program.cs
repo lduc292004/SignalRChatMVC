@@ -5,50 +5,69 @@ using SignalRChatMVC.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Kết nối SQL Server LocalDB
+// ✅ 1. Kết nối SQL Server LocalDB
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+ options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Cấu hình Identity cho đăng ký / đăng nhập
+// ✅ 2. Cấu hình Identity cho đăng ký / đăng nhập
 builder.Services.AddDefaultIdentity<ApplicationUser>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>();
 
-// Cấu hình cookie đăng nhập
+// ✅ 3. Cấu hình cookie đăng nhập
 builder.Services.ConfigureApplicationCookie(options =>
 {
-    options.LoginPath = "/Account/Login";
+    // Cấu hình này đã đảm bảo khi truy cập trang [Authorize] sẽ chuyển hướng về Login
+    options.LoginPath = "/Account/Login";
     options.LogoutPath = "/Account/Logout";
 });
 
-// Thêm MVC + SignalR + Session
+// ✅ 4. Thêm MVC + SignalR + Session
 builder.Services.AddControllersWithViews();
-builder.Services.AddSignalR();
+// 💡 SỬA ĐỔI: Tăng giới hạn kích thước nhận tin nhắn cho SignalR lên 5MB
+// Điều này giúp khắc phục lỗi "Connection closed with an error" khi gửi Base64 file lớn
+builder.Services.AddSignalR(options =>
+{
+    // 5 * 1024 * 1024 bytes = 5MB
+    options.MaximumReceiveMessageSize = 5 * 1024 * 1024;
+});
 builder.Services.AddSession();
 
 var app = builder.Build();
 
-// ✅ 5. Cấu hình middleware
+// ✅ 5. Middleware
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();
+
+// 🔹 Cho phép truy cập file tĩnh (CSS, JS, uploads, ảnh…)
 app.UseStaticFiles();
+
+// 🔹 Đảm bảo thư mục "uploads" tồn tại khi app khởi chạy
+var uploadDir = Path.Combine(app.Environment.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads");
+if (!Directory.Exists(uploadDir))
+{
+    Directory.CreateDirectory(uploadDir);
+}
 
 app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseSession();
 
-// ✅ 6. Định tuyến
+// ✅ 6. Định tuyến MVC + SignalR
 app.MapControllerRoute(
-    name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+ name: "default",
+// 💡 THAY ĐỔI TẠI ĐÂY: Chuyển hướng mặc định từ Home/Index sang Account/Login
+  pattern: "{controller=Account}/{action=Login}/{id?}"); // Sửa từ {controller=Home}/{action=Index}
 
 app.MapHub<ChatHub>("/chatHub");
 
+// ✅ 7. Chạy ứng dụng
 app.Run();
