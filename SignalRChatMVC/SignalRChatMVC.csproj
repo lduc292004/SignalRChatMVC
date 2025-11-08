@@ -27,6 +27,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <Folder Include="wwwroot\gifs\" />
 	  <Folder Include="wwwroot\uploads\" />
 	</ItemGroup>
 

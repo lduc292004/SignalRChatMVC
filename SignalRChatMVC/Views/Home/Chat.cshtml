@@ -1,6 +1,6 @@
 ﻿@{
 	ViewData["Title"] = "Discord-like Chat";
-	Layout = null; // Tùy chọn: Xóa Layout để đảm bảo chiếm toàn màn hình, nhưng tôi sẽ giữ lại nếu bạn cần thanh Navigation Bar
+	Layout = null;
 }
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -8,7 +8,6 @@
 
 <style>
 	/* 🎨 CSS TÙY CHỈNH CHO PHONG CÁCH DISCORD */
-	/* Thiết lập lại body để giao diện chat chiếm toàn bộ không gian (Nếu bạn đang dùng _Layout, hãy kiểm tra lại padding) */
 	body, html {
 		height: 100%;
 		margin: 0;
@@ -18,13 +17,12 @@
 
 	.discord-container {
 		display: flex;
-		height: calc(100vh - 56px); /* Điều chỉnh chiều cao trừ đi Nav Bar */
+		height: calc(100vh - 56px);
 		background-color: #36393f;
 		color: #dcddde;
 		font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
 	}
 
-	/* Cột 1: Danh sách Kênh/Nhóm */
 	.channel-sidebar {
 		width: 240px;
 		background-color: #2f3136;
@@ -34,7 +32,6 @@
 		border-right: 1px solid #202225;
 	}
 
-	/* Cột 3: Danh sách Thành viên */
 	.member-sidebar {
 		width: 200px;
 		background-color: #2f3136;
@@ -44,7 +41,6 @@
 		border-left: 1px solid #202225;
 	}
 
-	/* Cột 2: Khu vực Chat chính */
 	.main-chat-area {
 		flex-grow: 1;
 		display: flex;
@@ -52,7 +48,6 @@
 		background-color: #36393f;
 	}
 
-	/* Header Chat (Tên kênh) */
 	.chat-header {
 		padding: 10px 16px;
 		border-bottom: 1px solid #202225;
@@ -61,23 +56,20 @@
 		flex-shrink: 0;
 	}
 
-	/* Vùng hiển thị tin nhắn */
 	#messages {
 		flex-grow: 1;
 		padding: 10px 16px;
 		overflow-y: auto;
 	}
 
-	/* Vùng Input */
+	/* Đã thêm class position-relative ở HTML để Sticker Picker có thể định vị tuyệt đối */
 	.message-input-area {
-		/* Đảm bảo chiều cao Input là cố định */
 		padding: 10px 16px;
-		background-color: #36393f; /* Đổi về màu nền chat để input box nổi lên */
+		background-color: #36393f;
 		border-top: 1px solid #202225;
 		flex-shrink: 0;
 	}
 
-	/* Thiết kế lại các thành phần UI */
 	.discord-container .text-primary {
 		color: #b9bbbe !important;
 	}
@@ -93,21 +85,19 @@
 			border-color: #4752c4;
 		}
 
-	/* Input và Textarea */
 	.discord-container input.form-control,
 	.discord-container textarea.form-control {
 		background-color: #40444b;
-		border: none; /* Loại bỏ border */
+		border: none;
 		color: #dcddde;
-		border-radius: 8px; /* Bo góc input box */
+		border-radius: 8px;
 		padding: 10px 15px;
-		height: auto; /* Cho phép tự điều chỉnh chiều cao */
+		height: auto;
 	}
 
-	/* Danh sách Nhóm/Kênh */
 	.discord-container .list-group-item {
 		background-color: transparent;
-		color: #b9bbbe; /* Màu chữ kênh mờ */
+		color: #b9bbbe;
 		border: none;
 		padding: 5px 10px;
 		cursor: pointer;
@@ -117,15 +107,14 @@
 
 		.discord-container .list-group-item:hover,
 		.discord-container .list-group-item.active-channel {
-			background-color: #40444b; /* Màu hover hoặc kênh đang chọn */
-			color: #fff; /* Chữ trắng khi active */
+			background-color: #40444b;
+			color: #fff;
 		}
 
 			.discord-container .list-group-item.active-channel strong {
 				color: #fff;
 			}
 
-	/* Bong bóng tin nhắn */
 	.discord-container .bg-light {
 		background-color: #40444b !important;
 		color: #dcddde;
@@ -136,9 +125,28 @@
 	}
 
 	.discord-container .mb-3.d-flex {
-		/* Margin tin nhắn */
 		margin-bottom: 12px !important;
 	}
+
+	/* CSS cho Sticker Picker */
+	#stickerPicker {
+		/* Thêm scrollbar khi quá giới hạn chiều cao */
+		overflow-y: auto;
+		max-height: 250px;
+		padding: 10px;
+		border-radius: 8px;
+	}
+
+		#stickerPicker img {
+			transition: transform 0.1s;
+			background-color: #40444b; /* Tạo nền cho sticker để dễ nhìn */
+			padding: 2px;
+			border-radius: 4px;
+		}
+
+			#stickerPicker img:hover {
+				transform: scale(1.1); /* Hiệu ứng zoom khi hover */
+			}
 </style>
 
 <div id="discord-container" class="discord-container">
@@ -164,9 +172,17 @@
 		<div id="chat-header" class="chat-header"># Chat chung</div>
 		<div id="messages" class="flex-grow-1" style="overflow-y: auto;"></div>
 
-		<div class="message-input-area d-flex gap-2">
+		<div class="message-input-area d-flex gap-2 position-relative">
+
+			<div id="stickerPicker" class="position-absolute p-2 rounded shadow"
+				 style="bottom: 100%; left: 16px; right: 16px; background-color: #2f3136; max-height: 250px; overflow-y: auto; z-index: 10; display: none;">
+			</div>
+
 			<input id="messageInput" class="form-control" placeholder="Nhắn tin #chat-chung" />
 			<input type="file" id="fileInput" hidden />
+
+			<button id="stickerBtn" class="btn btn-outline-secondary" style="font-size: 1.2rem;">😊</button>
+
 			<button id="sendBtn" class="btn btn-primary">Gửi</button>
 			<button id="sendFileBtn" class="btn btn-outline-secondary">📎</button>
 		</div>
@@ -218,10 +234,6 @@
 
 <script>
 	// ⚡ LOGIC CLIENT-SIDE SIGNALR ⚡
-	// Lấy Username từ Identity (Tối ưu hóa: vì trang đã Authorize, ta dùng tên đăng nhập)
-	// Nếu bạn không dùng logic lấy tên từ Identity, hãy giữ lại prompt cũ:
-	// const username = prompt("Nhập tên của bạn:") || "Khách";
-	// Tạm thời giữ lại Prompt để tiện test trên nhiều tab trình duyệt
 	const username = prompt("Nhập tên của bạn:") || "Khách";
 
 	const conn = new signalR.HubConnectionBuilder()
@@ -245,7 +257,6 @@
 	}
 	startConn();
 
-	// Khởi tạo Modal
 	const createGroupModal = new bootstrap.Modal(document.getElementById("createGroupModal"));
 
 	// Hàm chuyển đổi chế độ Chat (Công khai/Nhóm)
@@ -256,7 +267,6 @@
 		const chatHeader = document.getElementById("chat-header");
 		const messageInput = document.getElementById("messageInput");
 
-		// Loại bỏ class active khỏi tất cả các kênh
 		document.querySelectorAll('#groupList .list-group-item').forEach(el => el.classList.remove('active-channel'));
 
 		if (mode === "public") {
@@ -273,19 +283,16 @@
 			chatHeader.textContent = `# ${name}`;
 			messageInput.placeholder = `Nhắn tin #${name}`;
 			msgBox.innerHTML = '';
-			// Thông tin nhóm sẽ được cập nhật khi nhận JoinedGroup
 		}
 	}
 
-	// 🧩 Sự kiện từ server: Cập nhật danh sách người dùng online (FIXED)
+	// 🧩 Sự kiện từ server: Cập nhật danh sách người dùng online
 	conn.on("UpdateUserList", users => {
 		onlineUsers = users;
 		const list = document.getElementById("userList");
-		const offlineList = document.getElementById("offlineUserList");
 		const onlineCount = document.getElementById("onlineCount");
 
 		list.innerHTML = "";
-		offlineList.innerHTML = ""; // Giả định offline
 		onlineCount.textContent = users.length;
 
 		users.forEach(u => {
@@ -294,16 +301,13 @@
 			li.textContent = u;
 			list.appendChild(li);
 		});
-
-		// Cần thêm logic để tính toán và hiển thị offline nếu bạn lưu trữ thông tin user trong DB
-		document.getElementById("offlineCount").textContent = 0; // Tạm thời
+		document.getElementById("offlineCount").textContent = 0;
 	});
 
-	// 🧩 Sự kiện từ server: Nhận danh sách nhóm (FIXED)
+	// 🧩 Sự kiện từ server: Nhận danh sách nhóm
 	conn.on("ReceiveGroups", groups => {
 		const list = document.getElementById("groupList");
 
-		// Lấy lại các item hiện có, trừ Chat chung
 		const publicBtn = document.getElementById("publicChatBtn");
 		list.innerHTML = "";
 		list.appendChild(publicBtn);
@@ -319,7 +323,6 @@
 			};
 			list.appendChild(li);
 		});
-		// Đảm bảo kênh hiện tại vẫn active
 		if (currentGroup) {
 			 const activeGroupElement = document.querySelector(`#groupList [data-group-name="${currentGroup}"]`);
 			 if(activeGroupElement) activeGroupElement.classList.add('active-channel');
@@ -343,26 +346,25 @@
 	// 🧩 Sự kiện từ server: Tham gia nhóm thành công
 	conn.on("JoinedGroup", group => {
 		currentGroup = group.name;
-		// Cập nhật thông tin nhóm ở cột thành viên
 		document.getElementById("groupInfo").innerHTML = `
 			<h6 class="text-primary small fw-bold text-uppercase">${group.name} ${group.isPrivate ? "🔒" : ""}</h6>
 			<p class="small text-muted mb-1">${group.description}</p>
 			<small class="text-muted">${group.members.length} thành viên. Tạo bởi: ${group.createdBy}</small>
 		`;
 		document.getElementById("messages").innerHTML = "";
-		// Cập nhật Header và Placeholder Input
 		document.getElementById("chat-header").textContent = `# ${group.name}`;
 		document.getElementById("messageInput").placeholder = `Nhắn tin #${group.name}`;
 	});
 
-	// Các thông báo hệ thống (error, join/leave group)
+	// Các thông báo hệ thống
 	conn.on("UserJoinedGroup", (user, group) => appendMsg(`${user} đã tham gia nhóm ${group}`, "system"));
 	conn.on("UserLeftGroup", (user, group) => appendMsg(`${user} rời nhóm ${group}`, "system"));
 	conn.on("UploadFailed", msg => appendMsg(`[LỖI FILE]: ${msg}`, "system"));
 	conn.on("GroupError", msg => alert(msg));
 	conn.on("JoinFailed", msg => alert(msg));
+	conn.on("MessageError", msg => alert(msg));
 
-	// 🧱 Gửi tin nhắn
+	// 🧱 Gửi tin nhắn TEXT (và EMOJI)
 	document.getElementById("sendBtn").onclick = async () => {
 		const input = document.getElementById("messageInput");
 		const msg = input.value.trim();
@@ -388,7 +390,7 @@
 		}
 	});
 
-	// 📎 Gửi file / ảnh (Giữ nguyên logic Base64)
+	// 📎 Gửi file / ảnh
 	document.getElementById("sendFileBtn").onclick = () => document.getElementById("fileInput").click();
 	document.getElementById("fileInput").onchange = async e => {
 		const file = e.target.files[0];
@@ -409,7 +411,6 @@
 			}
 		};
 		reader.readAsDataURL(file);
-		// Reset input để có thể chọn lại cùng 1 file
 		e.target.value = null;
 	};
 
@@ -437,7 +438,6 @@
 				select.appendChild(option);
 			}
 		});
-		// Đặt lại các trường input
 		document.getElementById('groupName').value = '';
 		document.getElementById('groupDesc').value = '';
 		document.getElementById('groupPin').value = '';
@@ -462,6 +462,106 @@
 		createGroupModal.hide();
 	};
 
+	// --------------------------------------------------------------------------------
+	// ⭐️ LOGIC STICKER ĐÃ HOÀN THIỆN (Hỗ trợ GIF/Phân loại) ⭐️
+	// --------------------------------------------------------------------------------
+
+	const stickerPicker = document.getElementById("stickerPicker");
+	const stickerBtn = document.getElementById("stickerBtn");
+	const stickerBaseUrl = "/stickers/";
+
+	// CẤU TRÚC DỮ LIỆU CUỐI CÙNG:
+	// HÃY CHẮC CHẮN RẰNG CÁC TÊN FILE GIF/WEBP TRONG PHẦN 'Sticker động' PHẢI KHỚP VỚI TÊN FILE THỰC TẾ CỦA BẠN TRONG wwwroot/stickers/
+	const stickerPacks = [
+		{
+			name: "Biểu cảm cơ bản",
+			files: ["1.jpg", "2.jpg", "3.jpg"]
+		},
+		{
+			name: "Gif",
+			// VÍ DỤ: Thay thế bằng TÊN FILE GIF/WEBP THỰC CỦA BẠN
+			files: ["gif1.gif", "gif2.gif", "gif3.gif"] // <-- Cần khớp tên file
+		},
+		{
+			name: "Phản ứng khác",
+			files: ["6.jpg", "7.jpg", "8.jpg", "9.jpg"]
+		}
+	];
+
+	// HÀM KHỞI TẠO VÀ HIỂN THỊ STICKER PICKER
+	function initStickerPicker() {
+		stickerPicker.innerHTML = "";
+		stickerPicker.style.display = 'block';
+
+		stickerPacks.forEach(pack => {
+			// 1. Tạo Header/Tên gói
+			const packHeader = document.createElement('h6');
+			packHeader.textContent = pack.name;
+			packHeader.className = 'text-white small fw-bold mt-2 mb-1';
+			stickerPicker.appendChild(packHeader);
+
+			// 2. Tạo Grid chứa Sticker
+			const gridDiv = document.createElement('div');
+			gridDiv.style.display = 'flex';
+			gridDiv.style.flexWrap = 'wrap';
+			gridDiv.style.gap = '8px';
+
+			pack.files.forEach(fileName => {
+				const fullUrl = stickerBaseUrl + fileName;
+				const img = document.createElement("img");
+
+				img.src = fullUrl;
+				img.alt = fileName.split('.')[0];
+				img.title = img.alt;
+				img.style.width = "50px";
+				img.style.height = "50px";
+				img.style.cursor = "pointer";
+				img.classList.add("rounded");
+
+				img.addEventListener('click', (e) => {
+					e.stopPropagation();
+					sendSticker(fullUrl);
+				});
+
+				gridDiv.appendChild(img);
+			});
+
+			stickerPicker.appendChild(gridDiv);
+		});
+	}
+
+	// Hàm gửi Sticker (gọi Hub)
+	async function sendSticker(stickerUrl) {
+		try {
+			if (currentGroup) {
+				await conn.invoke("SendGroupSticker", currentGroup, username, stickerUrl);
+			} else {
+				await conn.invoke("SendSticker", username, stickerUrl);
+			}
+			stickerPicker.style.display = 'none';
+		} catch (e) {
+			appendMsg(`Lỗi khi gửi Sticker: ${e.message}`, "system");
+		}
+	}
+
+	// Sự kiện click nút Sticker
+	stickerBtn.onclick = (e) => {
+		e.stopPropagation();
+		if (stickerPicker.style.display === 'none' || stickerPicker.style.display === '') {
+			initStickerPicker();
+			stickerPicker.style.display = 'block';
+		} else {
+			stickerPicker.style.display = 'none';
+		}
+	};
+
+	// Ẩn Sticker Picker khi click ra ngoài
+	document.addEventListener('click', function(event) {
+		if (event.target !== stickerBtn && !stickerPicker.contains(event.target)) {
+			stickerPicker.style.display = 'none';
+		}
+	});
+
 	// 🎨 Hàm Render tin nhắn lên UI
 	function renderMessage(user, msg) {
 		const box = document.getElementById("messages");
@@ -469,11 +569,17 @@
 		div.className = "mb-3 d-flex " + (user === username ? "justify-content-end" : "justify-content-start");
 
 		const contentDiv = document.createElement("div");
-		contentDiv.className = "p-2 rounded shadow-sm " + (user === username ? "bg-primary text-white" : "bg-light");
-		contentDiv.style.maxWidth = "70%";
+		const isSticker = msg.type === "sticker";
+
+		if (!isSticker) {
+			contentDiv.className = "p-2 rounded shadow-sm " + (user === username ? "bg-primary text-white" : "bg-light");
+			contentDiv.style.maxWidth = "70%";
+		} else {
+			// Class cho Sticker (Không nền, chỉ hiển thị ảnh/gif)
+			contentDiv.className = "p-0";
+		}
 
 		let messageContent = "";
-		// Nếu bạn muốn hiển thị Avatar như Discord, bạn sẽ cần lấy URL Avatar ở đây
 		const avatarHtml = `<span style="font-weight: bold; color: ${user === username ? '#fff' : '#8899ee'};">${user}:</span><br>`;
 
 		if (msg.type === "image") {
@@ -481,16 +587,37 @@
 		} else if (msg.type === "file") {
 			const fileName = msg.fileName || msg.content.split('/').pop();
 			messageContent = `${avatarHtml} 📎 <a href="${msg.content}" target="_blank" class="text-reset text-decoration-underline"><u>${fileName}</u></a>`;
+		} else if (msg.type === "sticker") {
+			// Xử lý Sticker (hỗ trợ GIF/WebP động nhờ thẻ <img>)
+			contentDiv.style.maxWidth = "200px";
+			messageContent = `
+				<img src="${msg.content}" alt="Sticker"
+					 class="rounded" style="max-width: 100%; max-height: 150px; margin-top: 5px;">
+			`;
 		} else {
+			// Văn bản (bao gồm Emoji)
 			messageContent = `${avatarHtml} ${msg.content}`;
 		}
 
 		// Thêm thời gian nhỏ ở dưới
-		messageContent += `<div class="text-end small mt-1" style="opacity: 0.6;">${msg.time}</div>`;
+		if (!isSticker) {
+			messageContent += `<div class="text-end small mt-1" style="opacity: 0.6;">${msg.time}</div>`;
+		}
+
 		contentDiv.innerHTML = messageContent;
 
 		div.appendChild(contentDiv);
 		box.appendChild(div);
+
+		// Thêm thời gian riêng biệt cho Sticker
+		if (isSticker) {
+			const timeDiv = document.createElement("div");
+			timeDiv.className = "text-muted small mt-1 px-2";
+			timeDiv.textContent = msg.time;
+			timeDiv.style.textAlign = user === username ? 'right' : 'left';
+			box.appendChild(timeDiv);
+		}
+
 		box.scrollTop = box.scrollHeight;
 	}
 

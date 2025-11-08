@@ -7,12 +7,11 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
-// 1. THÊM thư viện Authorization
 using Microsoft.AspNetCore.Authorization;
 
 namespace SignalRChatMVC.Hubs
 {
-    // 2. THÊM [Authorize] để BẮT BUỘC ĐĂNG NHẬP khi kết nối Hub
+    // BẮT BUỘC ĐĂNG NHẬP khi kết nối Hub
     [Authorize]
     public class ChatHub : Hub
     {
@@ -24,10 +23,8 @@ namespace SignalRChatMVC.Hubs
         // 🔹 Khi user kết nối
         public override async Task OnConnectedAsync()
         {
-            // 💡 CẢI TIẾN: Khi [Authorize] được thêm vào, chúng ta có thể lấy Username TỪ CONTEXT
-            // thay vì từ Query String, giúp bảo mật hơn.
-            // Tuy nhiên, để giữ nguyên logic client đã viết, ta sẽ dùng Query String tạm thời.
             var httpContext = Context.GetHttpContext();
+            // Lấy username từ Query String (giữ nguyên theo code gốc của bạn)
             var username = httpContext?.Request.Query["username"].ToString();
 
             if (!string.IsNullOrEmpty(username))
@@ -49,8 +46,6 @@ namespace SignalRChatMVC.Hubs
             await base.OnConnectedAsync();
         }
 
-        // ... (Giữ nguyên toàn bộ các Action khác: OnDisconnectedAsync, SendMessage, CreateGroup, JoinGroup, LeaveGroup, SendGroupMessage, SendGroupFile, SendPublicFile, GetGroups)
-
         // 🔹 Khi user ngắt kết nối
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
@@ -63,25 +58,44 @@ namespace SignalRChatMVC.Hubs
             await base.OnDisconnectedAsync(exception);
         }
 
-        // 🔹 Gửi tin nhắn công khai (Chat chung) - ĐÃ SỬA LỖI
+        // 🔹 Gửi tin nhắn công khai (Chat chung) - VẪN HỖ TRỢ EMOJI (dưới dạng ký tự Unicode)
         public async Task SendMessage(string user, string message)
         {
             var msgObj = new
             {
-                sender = user, // THÊM sender
+                sender = user,
                 content = message,
                 type = "text",
                 time = DateTime.Now.ToString("HH:mm:ss")
             };
 
-            // Gửi trực tiếp object, SignalR sẽ tự động serialize
             await Clients.All.SendAsync("ReceiveMessage", msgObj);
         }
 
-        // 🔹 Tin nhắn riêng tư - Tối ưu hóa gửi object
+        // 🔹 Gửi Sticker (Chat chung) - PHẦN MỚI
+        public async Task SendSticker(string user, string stickerUrl)
+        {
+            // Kiểm tra tính hợp lệ cơ bản (giả định Sticker được lưu trong wwwroot/stickers/)
+            if (string.IsNullOrEmpty(stickerUrl) || !stickerUrl.StartsWith("/stickers/"))
+            {
+                await Clients.Caller.SendAsync("MessageError", "URL Sticker không hợp lệ.");
+                return;
+            }
+
+            var msgObj = new
+            {
+                sender = user,
+                content = stickerUrl, // Gửi URL của sticker
+                type = "sticker", // Đánh dấu đây là Sticker
+                time = DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            await Clients.All.SendAsync("ReceiveMessage", msgObj);
+        }
+
+        // 🔹 Tin nhắn riêng tư - Giữ nguyên
         public async Task SendPrivateMessage(string toUser, string fromUser, string message)
         {
-            // Tìm ConnectionId của người nhận (toUser)
             var targetConn = Users.FirstOrDefault(u => u.Value == toUser).Key;
 
             if (!string.IsNullOrEmpty(targetConn))
@@ -94,14 +108,65 @@ namespace SignalRChatMVC.Hubs
                     time = DateTime.Now.ToString("HH:mm:ss")
                 };
 
-                // Gửi cho người nhận
                 await Clients.Client(targetConn).SendAsync("ReceivePrivateMessage", msgObj);
-                // Gửi lại cho người gửi (để hiển thị trên giao diện của người gửi)
                 await Clients.Caller.SendAsync("ReceivePrivateMessage", msgObj);
             }
         }
 
-        // 🔹 Tạo nhóm mới (có mã PIN & thêm thành viên) - GIỮ NGUYÊN
+        // 🔹 Gửi tin nhắn nhóm - VẪN HỖ TRỢ EMOJI
+        public async Task SendGroupMessage(string groupName, string user, string message)
+        {
+            if (!ChatGroups.TryGetValue(groupName, out var group)) return;
+
+            if (!group.Members.Contains(user))
+            {
+                await Clients.Caller.SendAsync("PermissionDenied", "Bạn không thuộc nhóm này!");
+                return;
+            }
+
+            var msgObj = new
+            {
+                sender = user,
+                group = groupName, // THÊM groupName
+                content = message,
+                type = "text",
+                time = DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            await Clients.Group(groupName).SendAsync("ReceiveGroupMessage", msgObj);
+        }
+
+        // 🔹 Gửi Sticker (Nhóm) - PHẦN MỚI
+        public async Task SendGroupSticker(string groupName, string user, string stickerUrl)
+        {
+            if (!ChatGroups.TryGetValue(groupName, out var group)) return;
+
+            if (!group.Members.Contains(user))
+            {
+                await Clients.Caller.SendAsync("PermissionDenied", "Bạn không thuộc nhóm này!");
+                return;
+            }
+
+            // Kiểm tra tính hợp lệ cơ bản (giả định Sticker được lưu trong wwwroot/stickers/)
+            if (string.IsNullOrEmpty(stickerUrl) || !stickerUrl.StartsWith("/stickers/"))
+            {
+                await Clients.Caller.SendAsync("MessageError", "URL Sticker không hợp lệ.");
+                return;
+            }
+
+            var msgObj = new
+            {
+                sender = user,
+                group = groupName,
+                content = stickerUrl, // Gửi URL của sticker
+                type = "sticker", // Đánh dấu đây là Sticker
+                time = DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            await Clients.Group(groupName).SendAsync("ReceiveGroupMessage", msgObj);
+        }
+
+        // 🔹 Tạo nhóm mới (có mã PIN & thêm thành viên) - Giữ nguyên
         public async Task CreateGroup(string groupName, string description, string createdBy, string? avatar, List<string>? members, bool isPrivate, string pinCode)
         {
             if (ChatGroups.ContainsKey(groupName))
@@ -129,7 +194,6 @@ namespace SignalRChatMVC.Hubs
                 Admins = new List<string> { createdBy }
             };
 
-            // Thêm thành viên được chọn
             if (members != null)
             {
                 foreach (var m in members)
@@ -141,10 +205,8 @@ namespace SignalRChatMVC.Hubs
 
             if (ChatGroups.TryAdd(groupName, group))
             {
-                // Thêm người tạo vào group SignalR
                 await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
 
-                // Thêm các thành viên khác vào group nếu đang online
                 foreach (var m in group.Members)
                 {
                     var conn = Users.FirstOrDefault(u => u.Value == m).Key;
@@ -152,12 +214,11 @@ namespace SignalRChatMVC.Hubs
                         await Groups.AddToGroupAsync(conn, groupName);
                 }
 
-                // Gửi thông báo đến mọi người
                 await Clients.All.SendAsync("GroupCreated", group);
             }
         }
 
-        // 🔹 Tham gia nhóm có mã PIN - GIỮ NGUYÊN
+        // 🔹 Tham gia nhóm có mã PIN - Giữ nguyên
         public async Task JoinGroup(string groupName, string username, string? pinInput = null)
         {
             if (!ChatGroups.TryGetValue(groupName, out var group))
@@ -176,12 +237,11 @@ namespace SignalRChatMVC.Hubs
                 group.Members.Add(username);
 
             await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-            // Cập nhật Group cho tất cả thành viên trong nhóm
             await Clients.Group(groupName).SendAsync("UserJoinedGroup", username, groupName);
             await Clients.Caller.SendAsync("JoinedGroup", group);
         }
 
-        // 🔹 Rời nhóm - GIỮ NGUYÊN
+        // 🔹 Rời nhóm - Giữ nguyên
         public async Task LeaveGroup(string groupName, string username)
         {
             if (!ChatGroups.TryGetValue(groupName, out var group)) return;
@@ -191,32 +251,7 @@ namespace SignalRChatMVC.Hubs
             await Clients.Group(groupName).SendAsync("UserLeftGroup", username, groupName);
         }
 
-        // 🔹 Gửi tin nhắn nhóm (text hoặc JSON) - ĐÃ SỬA LỖI
-        public async Task SendGroupMessage(string groupName, string user, string message)
-        {
-            if (!ChatGroups.TryGetValue(groupName, out var group)) return;
-
-            if (!group.Members.Contains(user))
-            {
-                await Clients.Caller.SendAsync("PermissionDenied", "Bạn không thuộc nhóm này!");
-                return;
-            }
-
-            var msgObj = new
-            {
-                sender = user,
-                group = groupName, // THÊM groupName
-                content = message,
-                type = "text",
-                time = DateTime.Now.ToString("HH:mm:ss")
-            };
-
-            // Gửi trực tiếp object, SignalR sẽ tự động serialize
-            await Clients.Group(groupName).SendAsync("ReceiveGroupMessage", msgObj);
-        }
-
-        // 🔹 Gửi file hoặc ảnh (base64 hoặc URL) - GIỮ NGUYÊN
-        // Cần kiểm tra lại logic upload Base64 ở Client và giới hạn kích thước!
+        // 🔹 Gửi file hoặc ảnh (base64 hoặc URL) - Giữ nguyên
         public async Task SendGroupFile(string groupName, string user, string fileName, string base64Data)
         {
             if (!ChatGroups.TryGetValue(groupName, out var group))
@@ -233,12 +268,10 @@ namespace SignalRChatMVC.Hubs
 
             try
             {
-                // Logic lưu file tại đây (rất nhạy cảm với kích thước file)
                 var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", groupName);
                 Directory.CreateDirectory(uploadDir);
 
                 var filePath = Path.Combine(uploadDir, fileName);
-                // Bạn có thể cần loại bỏ tiền tố Base64 như "data:image/png;base64," trước khi Convert.FromBase64String
                 var cleanBase64Data = base64Data.Contains(',') ? base64Data.Substring(base64Data.IndexOf(',') + 1) : base64Data;
                 await File.WriteAllBytesAsync(filePath, Convert.FromBase64String(cleanBase64Data));
 
@@ -248,11 +281,11 @@ namespace SignalRChatMVC.Hubs
 
                 var msgObj = new
                 {
-                    sender = user, // THÊM sender
-                    group = groupName, // THÊM groupName
+                    sender = user,
+                    group = groupName,
                     content = fileUrl,
                     type = fileType,
-                    fileName = fileName, // THÊM fileName để hiển thị tên file
+                    fileName = fileName,
                     time = DateTime.Now.ToString("HH:mm:ss")
                 };
 
@@ -260,23 +293,20 @@ namespace SignalRChatMVC.Hubs
             }
             catch (Exception ex)
             {
-                // Log lỗi chi tiết hơn ở Server Console
                 Console.WriteLine($"[ERROR SendGroupFile]: {ex.Message}");
                 await Clients.Caller.SendAsync("UploadFailed", $"Lỗi khi gửi file: {ex.Message}");
             }
         }
 
-        // 🔹 Gửi file hoặc ảnh ở Chat chung - GIỮ NGUYÊN
+        // 🔹 Gửi file hoặc ảnh ở Chat chung - Giữ nguyên
         public async Task SendPublicFile(string user, string fileName, string base64Data)
         {
             try
             {
-                // Logic lưu file tại đây
                 var uploadDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "public");
                 Directory.CreateDirectory(uploadDir);
 
                 var filePath = Path.Combine(uploadDir, fileName);
-                // Bạn có thể cần loại bỏ tiền tố Base64
                 var cleanBase64Data = base64Data.Contains(',') ? base64Data.Substring(base64Data.IndexOf(',') + 1) : base64Data;
                 await File.WriteAllBytesAsync(filePath, Convert.FromBase64String(cleanBase64Data));
 
@@ -286,10 +316,10 @@ namespace SignalRChatMVC.Hubs
 
                 var msgObj = new
                 {
-                    sender = user, // THÊM sender
+                    sender = user,
                     content = fileUrl,
                     type = fileType,
-                    fileName = fileName, // THÊM fileName
+                    fileName = fileName,
                     time = DateTime.Now.ToString("HH:mm:ss")
                 };
 
@@ -302,7 +332,7 @@ namespace SignalRChatMVC.Hubs
             }
         }
 
-        // 🔹 Lấy danh sách nhóm
+        // 🔹 Lấy danh sách nhóm - Giữ nguyên
         public async Task GetGroups() =>
             await Clients.Caller.SendAsync("ReceiveGroups", ChatGroups.Values);
     }
