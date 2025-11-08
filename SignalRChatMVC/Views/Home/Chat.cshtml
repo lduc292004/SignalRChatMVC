@@ -1,48 +1,199 @@
 ﻿@{
-	ViewData["Title"] = "Chat";
+	ViewData["Title"] = "Discord-like Chat";
+	Layout = null; // Tùy chọn: Xóa Layout để đảm bảo chiếm toàn màn hình, nhưng tôi sẽ giữ lại nếu bạn cần thanh Navigation Bar
 }
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/8.0.0/signalr.min.js"></script>
 
-<div class="container-fluid py-3">
-	<div class="row">
-		<div class="col-md-2 border-end" style="height: 60vh; overflow-y: auto;">
-			<h5 class="mb-3 text-primary">Người dùng online</h5>
-			<ul id="userList" class="list-group mb-4"></ul>
+<style>
+	/* 🎨 CSS TÙY CHỈNH CHO PHONG CÁCH DISCORD */
+	/* Thiết lập lại body để giao diện chat chiếm toàn bộ không gian (Nếu bạn đang dùng _Layout, hãy kiểm tra lại padding) */
+	body, html {
+		height: 100%;
+		margin: 0;
+		padding-top: 56px; /* Nếu Navigation Bar của _Layout chiếm 56px */
+		background-color: #36393f;
+	}
 
-			<h5 class="text-primary">Nhóm chat</h5>
-			<ul id="groupList" class="list-group mb-3"></ul>
+	.discord-container {
+		display: flex;
+		height: calc(100vh - 56px); /* Điều chỉnh chiều cao trừ đi Nav Bar */
+		background-color: #36393f;
+		color: #dcddde;
+		font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+	}
 
-			<button class="btn btn-sm btn-outline-success w-100" data-bs-toggle="modal" data-bs-target="#createGroupModal">
-				➕ Tạo nhóm
-			</button>
-			<button id="publicChatBtn" class="btn btn-sm btn-info w-100 mt-2">
-				💬 Chat chung
-			</button>
+	/* Cột 1: Danh sách Kênh/Nhóm */
+	.channel-sidebar {
+		width: 240px;
+		background-color: #2f3136;
+		padding: 8px;
+		overflow-y: auto;
+		flex-shrink: 0;
+		border-right: 1px solid #202225;
+	}
+
+	/* Cột 3: Danh sách Thành viên */
+	.member-sidebar {
+		width: 200px;
+		background-color: #2f3136;
+		padding: 8px;
+		overflow-y: auto;
+		flex-shrink: 0;
+		border-left: 1px solid #202225;
+	}
+
+	/* Cột 2: Khu vực Chat chính */
+	.main-chat-area {
+		flex-grow: 1;
+		display: flex;
+		flex-direction: column;
+		background-color: #36393f;
+	}
+
+	/* Header Chat (Tên kênh) */
+	.chat-header {
+		padding: 10px 16px;
+		border-bottom: 1px solid #202225;
+		font-size: 1.25rem;
+		font-weight: bold;
+		flex-shrink: 0;
+	}
+
+	/* Vùng hiển thị tin nhắn */
+	#messages {
+		flex-grow: 1;
+		padding: 10px 16px;
+		overflow-y: auto;
+	}
+
+	/* Vùng Input */
+	.message-input-area {
+		/* Đảm bảo chiều cao Input là cố định */
+		padding: 10px 16px;
+		background-color: #36393f; /* Đổi về màu nền chat để input box nổi lên */
+		border-top: 1px solid #202225;
+		flex-shrink: 0;
+	}
+
+	/* Thiết kế lại các thành phần UI */
+	.discord-container .text-primary {
+		color: #b9bbbe !important;
+	}
+
+	.discord-container .btn-info {
+		background-color: #5865f2;
+		border-color: #5865f2;
+		color: white;
+	}
+
+		.discord-container .btn-info:hover {
+			background-color: #4752c4;
+			border-color: #4752c4;
+		}
+
+	/* Input và Textarea */
+	.discord-container input.form-control,
+	.discord-container textarea.form-control {
+		background-color: #40444b;
+		border: none; /* Loại bỏ border */
+		color: #dcddde;
+		border-radius: 8px; /* Bo góc input box */
+		padding: 10px 15px;
+		height: auto; /* Cho phép tự điều chỉnh chiều cao */
+	}
+
+	/* Danh sách Nhóm/Kênh */
+	.discord-container .list-group-item {
+		background-color: transparent;
+		color: #b9bbbe; /* Màu chữ kênh mờ */
+		border: none;
+		padding: 5px 10px;
+		cursor: pointer;
+		border-radius: 3px;
+		margin-bottom: 2px;
+	}
+
+		.discord-container .list-group-item:hover,
+		.discord-container .list-group-item.active-channel {
+			background-color: #40444b; /* Màu hover hoặc kênh đang chọn */
+			color: #fff; /* Chữ trắng khi active */
+		}
+
+			.discord-container .list-group-item.active-channel strong {
+				color: #fff;
+			}
+
+	/* Bong bóng tin nhắn */
+	.discord-container .bg-light {
+		background-color: #40444b !important;
+		color: #dcddde;
+	}
+
+	.discord-container .bg-primary {
+		background-color: #5865f2 !important;
+	}
+
+	.discord-container .mb-3.d-flex {
+		/* Margin tin nhắn */
+		margin-bottom: 12px !important;
+	}
+</style>
+
+<div id="discord-container" class="discord-container">
+	<div class="channel-sidebar">
+		<div class="server-title mb-3 border-bottom pb-2">
+			<h5 class="text-primary mb-0">Wumpus Squad</h5>
 		</div>
 
-		<div class="col-md-7 d-flex flex-column">
-			<div id="messages" class="flex-grow-1 border rounded p-3 mb-2" style="overflow-y: auto; background: #f8f9fa;"></div>
-			<div class="d-flex gap-2">
-				<input id="messageInput" class="form-control" placeholder="Nhập tin nhắn..." />
-				<input type="file" id="fileInput" hidden />
-				<button id="sendBtn" class="btn btn-primary">Gửi</button>
-				<button id="sendFileBtn" class="btn btn-outline-secondary">📎</button>
-			</div>
+		<h6 class="text-primary mt-3 small fw-bold text-uppercase">KÊNH & NHÓM</h6>
+
+		<ul id="groupList" class="list-group mb-3">
+			<li id="publicChatBtn" class="list-group-item list-group-item-action active-channel" onclick="updateChatMode('public')">
+				<strong># Chat chung</strong>
+			</li>
+		</ul>
+
+		<button class="btn btn-sm btn-outline-success w-100" data-bs-toggle="modal" data-bs-target="#createGroupModal">
+			➕ Tạo nhóm mới
+		</button>
+	</div>
+
+	<div class="main-chat-area">
+		<div id="chat-header" class="chat-header"># Chat chung</div>
+		<div id="messages" class="flex-grow-1" style="overflow-y: auto;"></div>
+
+		<div class="message-input-area d-flex gap-2">
+			<input id="messageInput" class="form-control" placeholder="Nhắn tin #chat-chung" />
+			<input type="file" id="fileInput" hidden />
+			<button id="sendBtn" class="btn btn-primary">Gửi</button>
+			<button id="sendFileBtn" class="btn btn-outline-secondary">📎</button>
+		</div>
+	</div>
+
+	<div class="member-sidebar">
+		<div id="groupInfo">
+			<h6 class="text-primary small fw-bold text-uppercase">Thông tin nhóm</h6>
+			<p class="small text-muted">Đang ở chế độ **Chat chung**</p>
 		</div>
 
-		<div class="col-md-3 border-start">
-			<h5 class="text-primary">Thông tin nhóm</h5>
-			<div id="groupInfo" class="p-2 small text-muted">Đang ở chế độ **Chat chung**</div>
-		</div>
+		<hr>
+
+		<h6 class="text-primary small fw-bold text-uppercase">ONLINE (<span id="onlineCount">0</span>)</h6>
+		<ul id="userList" class="list-group mb-4">
+		</ul>
+
+		<h6 class="text-primary small fw-bold text-uppercase">OFFLINE (<span id="offlineCount">0</span>)</h6>
+		<ul id="offlineUserList" class="list-group mb-4">
+		</ul>
 	</div>
 </div>
 
 <div class="modal fade" id="createGroupModal" tabindex="-1" aria-hidden="true">
 	<div class="modal-dialog">
-		<div class="modal-content">
-			<div class="modal-header"><h5 class="modal-title">Tạo nhóm mới</h5></div>
+		<div class="modal-content" style="background-color: #36393f; color: #dcddde;">
+			<div class="modal-header" style="border-bottom-color: #202225;"><h5 class="modal-title">Tạo nhóm mới</h5></div>
 			<div class="modal-body">
 				<input id="groupName" class="form-control mb-2" placeholder="Tên nhóm" />
 				<textarea id="groupDesc" class="form-control mb-2" placeholder="Mô tả nhóm"></textarea>
@@ -56,7 +207,7 @@
 				<select id="groupMembers" class="form-control" multiple style="min-height: 100px;"></select>
 
 			</div>
-			<div class="modal-footer">
+			<div class="modal-footer" style="border-top-color: #202225;">
 				<button class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
 				<button id="createGroupBtn" class="btn btn-success">Tạo</button>
 			</div>
@@ -64,8 +215,15 @@
 	</div>
 </div>
 
+
 <script>
+	// ⚡ LOGIC CLIENT-SIDE SIGNALR ⚡
+	// Lấy Username từ Identity (Tối ưu hóa: vì trang đã Authorize, ta dùng tên đăng nhập)
+	// Nếu bạn không dùng logic lấy tên từ Identity, hãy giữ lại prompt cũ:
+	// const username = prompt("Nhập tên của bạn:") || "Khách";
+	// Tạm thời giữ lại Prompt để tiện test trên nhiều tab trình duyệt
 	const username = prompt("Nhập tên của bạn:") || "Khách";
+
 	const conn = new signalR.HubConnectionBuilder()
 		.withUrl(`/chatHub?username=${encodeURIComponent(username)}`)
 		.build();
@@ -73,91 +231,138 @@
 	let currentGroup = null;
 	let onlineUsers = [];
 
+	// Hàm kết nối
 	async function startConn() {
 		try {
 			await conn.start();
 			console.log("Connected as", username);
 			conn.invoke("GetGroups");
-			document.getElementById("messages").innerHTML = "";
 			updateChatMode("public");
 		} catch (err) {
-			console.error("Reconnect...", err);
+			console.error("Lỗi kết nối SignalR:", err);
 			setTimeout(startConn, 3000);
 		}
 	}
 	startConn();
 
+	// Khởi tạo Modal
 	const createGroupModal = new bootstrap.Modal(document.getElementById("createGroupModal"));
 
+	// Hàm chuyển đổi chế độ Chat (Công khai/Nhóm)
 	function updateChatMode(mode, name = null) {
 		currentGroup = name;
 		const info = document.getElementById("groupInfo");
 		const msgBox = document.getElementById("messages");
+		const chatHeader = document.getElementById("chat-header");
+		const messageInput = document.getElementById("messageInput");
+
+		// Loại bỏ class active khỏi tất cả các kênh
+		document.querySelectorAll('#groupList .list-group-item').forEach(el => el.classList.remove('active-channel'));
 
 		if (mode === "public") {
-			info.innerHTML = 'Đang ở chế độ **Chat chung**';
+			document.getElementById("publicChatBtn").classList.add('active-channel');
+			chatHeader.textContent = "# Chat chung";
+			messageInput.placeholder = "Nhắn tin #chat-chung";
+			info.innerHTML = '<h6 class="text-primary small fw-bold text-uppercase">Thông tin nhóm</h6><p class="small text-muted">Đang ở chế độ **Chat chung**</p>';
 			msgBox.innerHTML = '';
 			appendMsg("Đã chuyển sang chế độ Chat chung.", "system");
 		} else if (mode === "group" && name) {
+			const activeGroupElement = document.querySelector(`#groupList [data-group-name="${name}"]`);
+			if(activeGroupElement) activeGroupElement.classList.add('active-channel');
+
+			chatHeader.textContent = `# ${name}`;
+			messageInput.placeholder = `Nhắn tin #${name}`;
 			msgBox.innerHTML = '';
-			appendMsg(`Đã tham gia nhóm **${name}**.`, "system");
+			// Thông tin nhóm sẽ được cập nhật khi nhận JoinedGroup
 		}
 	}
 
-	// 🧩 Sự kiện từ server (Giữ nguyên)
+	// 🧩 Sự kiện từ server: Cập nhật danh sách người dùng online (FIXED)
 	conn.on("UpdateUserList", users => {
 		onlineUsers = users;
 		const list = document.getElementById("userList");
+		const offlineList = document.getElementById("offlineUserList");
+		const onlineCount = document.getElementById("onlineCount");
+
 		list.innerHTML = "";
+		offlineList.innerHTML = ""; // Giả định offline
+		onlineCount.textContent = users.length;
+
 		users.forEach(u => {
 			const li = document.createElement("li");
 			li.className = "list-group-item";
 			li.textContent = u;
 			list.appendChild(li);
 		});
+
+		// Cần thêm logic để tính toán và hiển thị offline nếu bạn lưu trữ thông tin user trong DB
+		document.getElementById("offlineCount").textContent = 0; // Tạm thời
 	});
 
+	// 🧩 Sự kiện từ server: Nhận danh sách nhóm (FIXED)
 	conn.on("ReceiveGroups", groups => {
 		const list = document.getElementById("groupList");
+
+		// Lấy lại các item hiện có, trừ Chat chung
+		const publicBtn = document.getElementById("publicChatBtn");
 		list.innerHTML = "";
+		list.appendChild(publicBtn);
+
 		groups.forEach(g => {
 			const li = document.createElement("li");
 			li.className = "list-group-item list-group-item-action";
-			li.innerHTML = `<strong>${g.name}</strong> ${g.isPrivate ? "🔒" : ""}`;
+			li.setAttribute("data-group-name", g.name);
+			li.innerHTML = `<strong># ${g.name}</strong> ${g.isPrivate ? "🔒" : ""}`;
 			li.onclick = () => {
 				updateChatMode("group", g.name);
 				joinGroup(g.name, g.isPrivate);
 			};
 			list.appendChild(li);
 		});
+		// Đảm bảo kênh hiện tại vẫn active
+		if (currentGroup) {
+			 const activeGroupElement = document.querySelector(`#groupList [data-group-name="${currentGroup}"]`);
+			 if(activeGroupElement) activeGroupElement.classList.add('active-channel');
+		} else {
+			document.getElementById("publicChatBtn").classList.add('active-channel');
+		}
 	});
 
+	// 🧩 Sự kiện từ server: Nhận tin nhắn công khai
 	conn.on("ReceiveMessage", msgObj => {
 		if (currentGroup) return;
 		renderMessage(msgObj.sender, msgObj);
 	});
 
-	conn.on("JoinedGroup", group => {
-		currentGroup = group.name;
-		document.getElementById("groupInfo").innerHTML = `
-			<b>${group.name}</b><br>${group.description}<br>
-			<small>${group.members.length} thành viên. Tạo bởi: ${group.createdBy}</small>`;
-		document.getElementById("messages").innerHTML = "";
-	});
-
-	conn.on("UserJoinedGroup", (user, group) => appendMsg(`${user} đã tham gia nhóm ${group}`, "system"));
-	conn.on("UserLeftGroup", (user, group) => appendMsg(`${user} rời nhóm ${group}`, "system"));
-
+	// 🧩 Sự kiện từ server: Nhận tin nhắn nhóm
 	conn.on("ReceiveGroupMessage", (msgObj) => {
 		if (msgObj.group !== currentGroup) return;
 		renderMessage(msgObj.sender, msgObj);
 	});
 
+	// 🧩 Sự kiện từ server: Tham gia nhóm thành công
+	conn.on("JoinedGroup", group => {
+		currentGroup = group.name;
+		// Cập nhật thông tin nhóm ở cột thành viên
+		document.getElementById("groupInfo").innerHTML = `
+			<h6 class="text-primary small fw-bold text-uppercase">${group.name} ${group.isPrivate ? "🔒" : ""}</h6>
+			<p class="small text-muted mb-1">${group.description}</p>
+			<small class="text-muted">${group.members.length} thành viên. Tạo bởi: ${group.createdBy}</small>
+		`;
+		document.getElementById("messages").innerHTML = "";
+		// Cập nhật Header và Placeholder Input
+		document.getElementById("chat-header").textContent = `# ${group.name}`;
+		document.getElementById("messageInput").placeholder = `Nhắn tin #${group.name}`;
+	});
+
+	// Các thông báo hệ thống (error, join/leave group)
+	conn.on("UserJoinedGroup", (user, group) => appendMsg(`${user} đã tham gia nhóm ${group}`, "system"));
+	conn.on("UserLeftGroup", (user, group) => appendMsg(`${user} rời nhóm ${group}`, "system"));
 	conn.on("UploadFailed", msg => appendMsg(`[LỖI FILE]: ${msg}`, "system"));
 	conn.on("GroupError", msg => alert(msg));
 	conn.on("JoinFailed", msg => alert(msg));
 
-	// 📩 Gửi tin nhắn (Giữ nguyên)
+	// 🧱 Gửi tin nhắn
 	document.getElementById("sendBtn").onclick = async () => {
 		const input = document.getElementById("messageInput");
 		const msg = input.value.trim();
@@ -175,7 +380,7 @@
 		}
 	};
 
-	// ⌨️ THÊM: Gửi tin nhắn bằng phím Enter
+	// ⌨️ Gửi tin nhắn bằng phím Enter
 	document.getElementById("messageInput").addEventListener("keydown", function (event) {
 		if (event.keyCode === 13) {
 			event.preventDefault();
@@ -183,10 +388,7 @@
 		}
 	});
 
-	// 💬 Nút Chat chung (Giữ nguyên)
-	document.getElementById("publicChatBtn").onclick = () => updateChatMode("public");
-
-	// 📎 Gửi file / ảnh (Giữ nguyên)
+	// 📎 Gửi file / ảnh (Giữ nguyên logic Base64)
 	document.getElementById("sendFileBtn").onclick = () => document.getElementById("fileInput").click();
 	document.getElementById("fileInput").onchange = async e => {
 		const file = e.target.files[0];
@@ -207,12 +409,14 @@
 			}
 		};
 		reader.readAsDataURL(file);
+		// Reset input để có thể chọn lại cùng 1 file
+		e.target.value = null;
 	};
 
-	// 🧱 Hàm join group (Giữ nguyên)
+	// 🧱 Hàm join group
 	async function joinGroup(name, isPrivate) {
 		let pin = null;
-		if (isPrivate) pin = prompt("Nhập mã PIN để tham gia:");
+		if (isPrivate) pin = prompt("Nhóm này yêu cầu mã PIN:");
 		try {
 			 await conn.invoke("JoinGroup", name, username, pin);
 		} catch (e) {
@@ -220,7 +424,7 @@
 		}
 	}
 
-	// THÊM: Sự kiện điền danh sách thành viên khi Modal mở (Giữ nguyên)
+	// 🧱 Xử lý Modal Tạo Nhóm
 	document.getElementById('createGroupModal').addEventListener('show.bs.modal', function () {
 		const select = document.getElementById('groupMembers');
 		select.innerHTML = '';
@@ -233,14 +437,18 @@
 				select.appendChild(option);
 			}
 		});
+		// Đặt lại các trường input
+		document.getElementById('groupName').value = '';
+		document.getElementById('groupDesc').value = '';
+		document.getElementById('groupPin').value = '';
+		document.getElementById('privateGroup').checked = false;
 	});
 
-	// 🧱 Tạo nhóm mới (Giữ nguyên logic đã sửa)
 	document.getElementById("createGroupBtn").onclick = async () => {
-		const name = groupName.value.trim();
-		const desc = groupDesc.value.trim();
-		const pin = groupPin.value.trim();
-		const isPrivate = privateGroup.checked;
+		const name = document.getElementById('groupName').value.trim();
+		const desc = document.getElementById('groupDesc').value.trim();
+		const pin = document.getElementById('groupPin').value.trim();
+		const isPrivate = document.getElementById('privateGroup').checked;
 
 		const memberSelect = document.getElementById('groupMembers');
 		const selectedMembers = Array.from(memberSelect.options)
@@ -254,34 +462,43 @@
 		createGroupModal.hide();
 	};
 
-	// 🎨 Render tin nhắn (Giữ nguyên)
+	// 🎨 Hàm Render tin nhắn lên UI
 	function renderMessage(user, msg) {
 		const box = document.getElementById("messages");
 		const div = document.createElement("div");
-		div.className = "mb-2 d-flex " + (user === username ? "justify-content-end" : "justify-content-start");
+		div.className = "mb-3 d-flex " + (user === username ? "justify-content-end" : "justify-content-start");
 
 		const contentDiv = document.createElement("div");
 		contentDiv.className = "p-2 rounded shadow-sm " + (user === username ? "bg-primary text-white" : "bg-light");
 		contentDiv.style.maxWidth = "70%";
 
+		let messageContent = "";
+		// Nếu bạn muốn hiển thị Avatar như Discord, bạn sẽ cần lấy URL Avatar ở đây
+		const avatarHtml = `<span style="font-weight: bold; color: ${user === username ? '#fff' : '#8899ee'};">${user}:</span><br>`;
+
 		if (msg.type === "image") {
-			contentDiv.innerHTML = `<b>${user}:</b><br><img src="${msg.content}" class="rounded border mt-1" style="max-width: 100%; max-height: 200px;">`;
+			messageContent = `${avatarHtml}<img src="${msg.content}" alt="Attachment" class="rounded border mt-1" style="max-width: 100%; max-height: 200px;">`;
 		} else if (msg.type === "file") {
 			const fileName = msg.fileName || msg.content.split('/').pop();
-			contentDiv.innerHTML = `<b>${user}:</b> 📎 <a href="${msg.content}" target="_blank" class="text-reset"><u>${fileName}</u></a>`;
+			messageContent = `${avatarHtml} 📎 <a href="${msg.content}" target="_blank" class="text-reset text-decoration-underline"><u>${fileName}</u></a>`;
 		} else {
-			contentDiv.innerHTML = `<b>${user}:</b> ${msg.content}`;
+			messageContent = `${avatarHtml} ${msg.content}`;
 		}
+
+		// Thêm thời gian nhỏ ở dưới
+		messageContent += `<div class="text-end small mt-1" style="opacity: 0.6;">${msg.time}</div>`;
+		contentDiv.innerHTML = messageContent;
 
 		div.appendChild(contentDiv);
 		box.appendChild(div);
 		box.scrollTop = box.scrollHeight;
 	}
 
+	// Hàm hiển thị tin nhắn hệ thống
 	function appendMsg(text, type = "system") {
 		const box = document.getElementById("messages");
 		const div = document.createElement("div");
-		div.className = type === "system" ? "text-center text-muted fst-italic small mb-1" : "mb-2";
+		div.className = type === "system" ? "text-center text-muted fst-italic small mb-2" : "mb-3";
 		div.textContent = text;
 		box.appendChild(div);
 		box.scrollTop = box.scrollHeight;
